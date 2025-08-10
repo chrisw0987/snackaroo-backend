@@ -15,6 +15,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const cors = require("cors");
 const Stripe = require('stripe');
+const { get } = require("http");
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const getBaseUrl = (req) => {
     const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
@@ -114,13 +115,26 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
 //Create Upload Endpoint for IMG
 app.use('/images', express.static('upload/images'));
 
+function getBaseUrl(req) {
+    const explicit = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL;
+    if (explicit) return explicit;
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+    const host = (req.headers['x-forwarded-host'] || req.get('host'));
+    return `${proto}://${host}`;
+}
+
+
 app.post('/upload', upload.single('product'), (req,res)=>{
-    const base = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const imageUrl = `${getBaseUrl(req)}/images/${req.file.filename}`;
+    const baseUrl = getBaseUrl(req);
+    const relPath = `/images/${req.file.filename}`;
+    const absolute = `${baseUrl}${relPath}`;
+
     res.json({
         success: 1,
-        image_url: imageUrl})
+        image_path: relPath,
+        image_url: absolute,
     });
+});
 
 //Schema for Creating Products
 const Product = mongoose.model("Product", {
@@ -170,10 +184,11 @@ app.post('/addproduct', async (req,res)=> {
     else {
         id = 1;
     }
+    const imageValue = req.body.image_path || req.body.image;
      const product = new Product({
         id: id,
         name: req.body.name,
-        image: req.body.image,
+        image: imageValue,
         category: req.body.category,
         new_price: req.body.new_price,
         old_price: req.body.old_price,
