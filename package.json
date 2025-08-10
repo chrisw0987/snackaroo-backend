@@ -19,5 +19,8 @@
     "mongoose": "^8.16.4",
     "multer": "^2.0.2",
     "stripe": "^18.4.0"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }
