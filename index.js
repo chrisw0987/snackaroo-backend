@@ -9,12 +9,18 @@ console.log('Loaded STRIPE_SECRET_KEY prefix:', (process.env.STRIPE_SECRET_KEY |
 const PORT = process.env.PORT || 4000;
 const express = require("express");
 const app = express();
+app.set('trust proxy', 1); 
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const cors = require("cors");
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const getBaseUrl = (req) => {
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const host = req.get('host');
+    return `${proto}://${host}`;
+}
 
 app.post(
   '/webhook',
@@ -64,13 +70,25 @@ app.post(
 );
 app.use(express.json());
 
+const allowedOrigins = [
+  'https://chrisw0987.github.io',               
+  'https://chrisw0987.github.io/snackaroo-admin', 
+  'https://chrisw0987.github.io/snackaroo-frontend',
+];
+
 app.use(cors({
-    origin: [
-    'https://chrisw0987.github.io',         
-  ],
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+
+    if (allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
+
+    cb(new Error('Not allowed by CORS: ' + origin));
+  },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type', 'auth-token', 'stripe-signature'],
 }));
+
+app.options('*', cors());
 
 
 //DB Connect 
@@ -91,16 +109,18 @@ const storage = multer.diskStorage({
 
 
 const upload = multer({storage:storage});
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
 
 //Create Upload Endpoint for IMG
 app.use('/images', express.static('upload/images'));
 
 app.post('/upload', upload.single('product'), (req,res)=>{
+    const base = PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const imageUrl = `${getBaseUrl(req)}/images/${req.file.filename}`;
     res.json({
         success: 1,
-        image_url: `http://localhost:${PORT}/images/${req.file.filename}`
-    })
-});
+        image_url: imageUrl})
+    });
 
 //Schema for Creating Products
 const Product = mongoose.model("Product", {
